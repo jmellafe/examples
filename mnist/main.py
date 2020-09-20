@@ -36,13 +36,17 @@ class Net(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
+    optimizer.zero_grad()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
         output = model(data)
         loss = F.nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
+
+        if (batch_idx+1)%args.bs_multiplier == 0:
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
@@ -73,8 +77,10 @@ def test(model, device, test_loader):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 64)')
+    parser.add_argument('--max-bs', type=int, default=64, metavar='N',
+                        help='maximum batch for the gpu')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=14, metavar='N',
@@ -95,6 +101,14 @@ def main():
                         help='For Saving the current Model')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
+
+    if args.batch_size > args.max_bs:
+        assert args.batch_size % args.max_bs == 0, "error"
+        args.bs_multiplier = args.batch_size // args.max_bs
+        args.batch_size = args.max_bs
+
+    else:
+        args.bs_multiplier = 1
 
     torch.manual_seed(args.seed)
 
